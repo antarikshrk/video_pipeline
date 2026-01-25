@@ -29,6 +29,7 @@ logic s_axis_video_tready_r;
 logic [23:0] m_axis_video_tdata_r;
 logic m_axis_video_tvalid_r;
 logic m_axis_video_last_r;
+logic m_axis_video_tuser_r;
 
 //Register Assignments:
 
@@ -40,8 +41,9 @@ assign green = s_axis_video_tdata[7:0];
 //Internal Registers
 assign s_axis_video_tready = s_axis_video_tready_r;
 assign m_axis_video_tdata  = m_axis_video_tdata_r;
-assign m_axis_video_tvalid = m_axis_video_tvalid_r;
+assign m_axis_video_tvalid = m_axis_video_tvalid_r; //Indicates if the Output is ready
 assign m_axis_video_last = m_axis_video_last_r;
+assign m_axis_video_tuser = m_axis_video_tuser_r;
 
 
 //Greyscale Formula: G = (0.299R + 0.587G + 0.114B)
@@ -52,25 +54,23 @@ end
 
 always_ff @(posedge aclk) begin
     if (!aresetn) begin
-        m_axis_video_tvalid_r <= 0;
-        s_axis_video_tready_r <= 0;
+        m_axis_video_tvalid_r <= 1'b0;
+        s_axis_video_tready_r <= 1'b0;
         m_axis_video_tdata_r <= 24'b0;
     end else begin
-        if (s_axis_video_tvalid && m_axis_video_tready) begin //If handshaking enabled
-            s_axis_video_tready_r <= 1;
-            m_axis_video_tvalid_r <= 1;
-            m_axis_video_tdata_r <= {gray, gray, gray}; //Concatenate the Grey values
-            if (s_axis_video_tlast == 1) begin
-                m_axis_video_tdata_r[23:16] <=  gray; //Don't send data over
-                m_axis_video_last_r <= 1;
-            end
-        end else begin
-            s_axis_video_tready_r <= 0;
-            m_axis_video_tvalid_r <= 0;
-            m_axis_video_tdata_r <= 24'b0;
-        end
+        s_axis_video_tready_r <= 1'b1; //Always Ready
+
+        //Input Handshaking -> Send Data
+        if (s_axis_video_tvalid && s_axis_video_tready_r) begin
+            m_axis_video_tdata_r <= {gray, gray, gray}; //Get Data
+            m_axis_video_last_r <= s_axis_video_tlast;
+            m_axis_video_tuser_r <= s_axis_video_tuser;
+            m_axis_video_tvalid_r <= 1'b1; //Output is Valid
+        end  
+        //Output Handshaking -> Confirm Data
+        if (m_axis_video_tvalid_r && m_axis_video_tready)  begin 
+            m_axis_video_tvalid_r <= 1'b0; //Output not valid anymore
+        end 
     end
 end
-
-
 endmodule
